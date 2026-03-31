@@ -1,0 +1,9 @@
+services:
+  orchestrator:
+    build: .
+    volumes:
+      - ./groups:/app/groups
+      - ./nanoclaw.db:/app/nanoclaw.db
+      - ./lancedb:/app/lancedb
+    env_file: .env
+    restart: unless-stopped

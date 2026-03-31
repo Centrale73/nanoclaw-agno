@@ -1,0 +1,16 @@
+# Environment
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Data
+nanoclaw.db
+lancedb/
+groups/*/knowledge/*.lance
+
+# IDE
+.vscode/
+.idea/
+*.swp

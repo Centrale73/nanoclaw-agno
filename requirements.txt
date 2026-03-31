@@ -1,0 +1,8 @@
+agno[all]
+python-telegram-bot
+discord.py
+slack-bolt
+croniter
+lancedb
+openai
+anthropic
