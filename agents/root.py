@@ -1,10 +1,11 @@
 from pathlib import Path
-from agno.agent import Agent, RunResponse
-from agno.memory.v2.memory import Memory
-from agno.memory.v2.db.sqlite import SqliteMemoryDb
-from agno.knowledge.text import TextKnowledgeBase
+from agno.agent import Agent
+from agno.db.sqlite import SqliteDb
+from agno.memory import MemoryManager
+from agno.knowledge import Knowledge
+from agno.knowledge.reader.text_reader import TextReader
 from agno.vectordb.lancedb import LanceDb
-from agno.embedder.openai import OpenAIEmbedder
+from agno.knowledge.embedder.openai import OpenAIEmbedder
 from agno.tools import tool
 
 from context import load_context, update_context
@@ -30,16 +31,19 @@ def get_root_agent(group_id: str, provider_override: str = "") -> Agent:
         ["gpt-4o", "grok-3", "groq-llama", "openrouter-auto"],
     )
 
+    safe_id = group_id.replace(':', '_')
+
     group_context = load_context(group_id)
-    kb_path = f"groups/{group_id.replace(':', '_')}/knowledge"
+    kb_path = Path(f"groups/{safe_id}/knowledge")
     knowledge = None
-    if Path(kb_path).exists():
-        knowledge = TextKnowledgeBase(
-            path=kb_path,
+    if kb_path.exists() and any(kb_path.iterdir()):
+        knowledge = Knowledge(
             vector_db=LanceDb(
-                uri=f"./lancedb/{group_id.replace(':', '_')}",
+                uri=f"./lancedb/{safe_id}",
+                table_name=f"kb_{safe_id}",
                 embedder=OpenAIEmbedder(),
             ),
+            readers={"text": TextReader()},
         )
 
     instructions = [
@@ -52,14 +56,17 @@ def get_root_agent(group_id: str, provider_override: str = "") -> Agent:
     ]
     if group_context:
         instructions.insert(0, f"Group context:\n{group_context}")
+    agent_db = SqliteDb(
+        db_file="nanoclaw.db",
+        memory_table=f"memory_{safe_id}",
+        session_table=f"sessions_{safe_id}",
+    )
 
     agent = Agent(
         name=f"Root [{group_id}] via {used}",
         model=model,
-        memory=Memory(db=SqliteMemoryDb(
-            table_name=f"memory_{group_id.replace(':', '_')}",
-            db_file="nanoclaw.db",
-        )),
+        db=agent_db,
+        memory_manager=MemoryManager(db=agent_db),
         knowledge=knowledge,
         tools=[
             make_subordinate_tool(group_id, depth=0),
@@ -67,11 +74,10 @@ def get_root_agent(group_id: str, provider_override: str = "") -> Agent:
         ],
         enable_agentic_memory=True,
         search_knowledge=knowledge is not None,
-        add_history_to_messages=True,
+        add_history_to_context=True,
         num_history_runs=10,
         instructions=instructions,
         markdown=True,
-        show_tool_calls=True,
     )
 
     _agents[cache_key] = agent

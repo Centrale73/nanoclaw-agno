@@ -4,8 +4,8 @@ from agno.tools.python import PythonTools
 from agno.tools.shell import ShellTools
 from agno.tools.newspaper4k import Newspaper4kTools
 from agno.tools import tool
-from agno.memory.v2.memory import Memory
-from agno.memory.v2.db.sqlite import SqliteMemoryDb
+from agno.db.sqlite import SqliteDb
+from agno.memory import MemoryManager
 from models import build_model_with_fallback
 
 PROFILES: dict[str, dict] = {
@@ -70,12 +70,13 @@ def make_subordinate_tool(group_id: str, depth: int, max_depth: int = 3):
     The tool factory closes over group_id and depth, enabling
     recursive spawning up to max_depth levels.
     """
-    shared_memory = Memory(
-        db=SqliteMemoryDb(
-            table_name=f"memory_{group_id.replace(':', '_')}",
-            db_file="nanoclaw.db",
-        )
+    safe_id = group_id.replace(':', '_')
+    shared_db = SqliteDb(
+        db_file="nanoclaw.db",
+        memory_table=f"memory_{safe_id}",
+        session_table=f"sessions_{safe_id}",
     )
+    shared_memory_manager = MemoryManager(db=shared_db)
     available = list(PROFILES.keys())
 
     @tool(
@@ -115,7 +116,8 @@ def make_subordinate_tool(group_id: str, depth: int, max_depth: int = 3):
             name=f"{profile}/{used} (depth {depth+1})",
             model=model,
             tools=child_tools,
-            memory=shared_memory,
+            db=shared_db,
+            memory_manager=shared_memory_manager,
             enable_agentic_memory=True,
             instructions=config["instructions"],
             markdown=False,
